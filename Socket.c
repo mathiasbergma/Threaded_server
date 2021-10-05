@@ -64,11 +64,6 @@ int main()
 	//House keeping
 	freeaddrinfo(bind_address);
 
-	/*
-	 * INFO
-	 * Vi har forbundet til porten og ip, nu skal vi til at vente på om der er nogen som ringer
-	 * At lytte er step 1
-	 */
 
 	printf("Listening...\n");
 	if (listen(socket_listen, 10) < 0)
@@ -93,11 +88,13 @@ int main()
 
 		printf("Client is connected... ");
 
-		//handle_conn(&socket_client);
-
+		/* Create a new ptread variable */
 		pthread_t t;
+		/* Instantiate a pointer and allocate some memory for it */
 		int *p_sock_cli = malloc(sizeof(int));
+		/* Save socket client to the new variable */
 		*p_sock_cli = socket_client;
+		/* Create a new tread */
 		pthread_create(&t, NULL, handle_conn, p_sock_cli);
 
 	}
