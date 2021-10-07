@@ -112,7 +112,7 @@ int main()
 			pthread_create(&t, NULL, handle_conn, p_sock_cli);
 
 			/*
-			 * Making sure that only 10 active threads exists.
+			 * Making sure that only 10 threads exists.
 			 * Lock the mutex
 			 */
 			pthread_mutex_lock(&sock_mutex);
