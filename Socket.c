@@ -17,7 +17,7 @@
 #define ISVALIDSOCKET(s) ((s) >= 0)
 #define CLOSESOCKET(s) close(s)
 #define SOCKET int
-#define QUEUE_SIZE 10
+#define QUEUE_SIZE 12
 #define ACTIVE_QUEUE 2
 #define PORT "8080"
 
@@ -32,7 +32,6 @@ pthread_cond_t ctr_cond = PTHREAD_COND_INITIALIZER;
 volatile int active_ctr = 0;
 
 pthread_mutex_t sock_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t sock_cond = PTHREAD_COND_INITIALIZER;
 volatile int sockets = 0;
 
 void* handle_conn(void *p_socket_client);
@@ -40,7 +39,7 @@ void* handle_conn(void *p_socket_client);
 int main()
 {
 	printf("Configuring local address...\n");
-	struct addrinfo hints; // A struct that can contain all necessary information
+	struct addrinfo hints; //A struct that can contain all necessary information
 	memset(&hints, 0, sizeof(hints)); // Fill hints with 0's
 
 	hints.ai_family = AF_UNSPEC; 					//IPv4
@@ -69,7 +68,7 @@ int main()
 	if (bind(socket_listen, bind_address->ai_addr, bind_address->ai_addrlen))
 	{
 		fprintf(stderr, "bind() failed. (%d)\nPort is most "
-				"likely in use", errno);
+				"likely in use\n", errno);
 		return 1;
 	}
 
@@ -144,7 +143,7 @@ void* handle_conn(void *p_socket_client)
 	free(p_socket_client);
 	char request[1024];
 
-	// Check if we already have 2 socket that are ECHOing
+	// Check if we already have 2 sockets that are ECHOing
 	if (active_ctr >= ACTIVE_QUEUE)
 	{
 		char init_reply[] = "Connection is active - You are queued for "
@@ -181,7 +180,7 @@ void* handle_conn(void *p_socket_client)
 	// Zero terminate the response so strlen() works
 	request[bytes_received] = 0;
 
-	while (request[0] != 0x04)
+	while ((request[0] != 0x04) && (bytes_received != 0))
 	{
 
 		printf("Received %d bytes.\n", bytes_received);
@@ -202,7 +201,7 @@ void* handle_conn(void *p_socket_client)
 	char goodbye[] = "Closing connection\n";
 	send(socket_client, goodbye, strlen(goodbye), 0);
 
-	printf("Closing connection...\n");
+	printf("Closing connection... ");
 	CLOSESOCKET(socket_client);
 
 	// Updating countervalue
@@ -211,12 +210,13 @@ void* handle_conn(void *p_socket_client)
 	pthread_cond_signal(&ctr_cond);
 	pthread_mutex_unlock(&ctr_mutex);
 
-	/*
-	 * A socket has been closed. "sockets" must reflect this
-	 */
+
+	 // A socket has been closed. "sockets" must reflect this
 	pthread_mutex_lock(&sock_mutex);
 	sockets--;
 	pthread_mutex_unlock(&sock_mutex);
+
+	printf("%d active connections\n", sockets);
 
 	return NULL;
 }
