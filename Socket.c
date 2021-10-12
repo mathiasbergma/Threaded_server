@@ -19,6 +19,7 @@
 #define SOCKET int
 #define QUEUE_SIZE 10
 #define ACTIVE_QUEUE 2
+#define PORT "8080"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,11 +29,11 @@
 
 pthread_mutex_t ctr_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t ctr_cond = PTHREAD_COND_INITIALIZER;
-int active_ctr = 0;
+volatile int active_ctr = 0;
 
 pthread_mutex_t sock_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t sock_cond = PTHREAD_COND_INITIALIZER;
-int sockets = 0;
+volatile int sockets = 0;
 
 void* handle_conn(void *p_socket_client);
 
@@ -40,7 +41,7 @@ int main()
 {
 	printf("Configuring local address...\n");
 	struct addrinfo hints; // A struct that can contain all necessary information
-	memset(&hints, 0, sizeof(hints)); /* Fill hints with 0's */
+	memset(&hints, 0, sizeof(hints)); // Fill hints with 0's
 
 	hints.ai_family = AF_UNSPEC; 					//IPv4
 	hints.ai_socktype = SOCK_STREAM; 				//TCP
@@ -48,7 +49,7 @@ int main()
 
 	struct addrinfo *bind_address;
 
-	getaddrinfo(0, "8080", &hints, &bind_address);
+	getaddrinfo(0, PORT, &hints, &bind_address);
 
 	printf("Creating socket...\n");
 	SOCKET socket_listen;							// Just an int
@@ -67,7 +68,8 @@ int main()
 	printf("Binding socket to local address...\n");
 	if (bind(socket_listen, bind_address->ai_addr, bind_address->ai_addrlen))
 	{
-		fprintf(stderr, "bind() failed. (%d)\n", errno);
+		fprintf(stderr, "bind() failed. (%d)\nPort is most "
+				"likely in use", errno);
 		return 1;
 	}
 
@@ -96,32 +98,29 @@ int main()
 			return 1;
 		}
 
-		/* Create a new ptread variable */
+		// Create a new ptread variable
 		pthread_t t;
-		/* Instantiate a pointer and allocate some memory for it */
+		// Instantiate a pointer and allocate some memory for it
 		int *p_sock_cli = malloc(sizeof(int));
-		/* Save socket client to the new variable */
+		// Save socket client to the new variable
 		*p_sock_cli = socket_client;
-		/* Create a new tread */
 
 		// Only create a new thread if current count is less that QUEUE_SIZE
 		if (sockets < QUEUE_SIZE)
 		{
 			printf("Client is connected... ");
-
+			// Create a new tread
 			pthread_create(&t, NULL, handle_conn, p_sock_cli);
 
-			/*
-			 * Making sure that only 10 threads exists.
-			 * Lock the mutex
-			 */
+			// Making sure that only 10 threads exists. Lock the mutex
 			pthread_mutex_lock(&sock_mutex);
 			// Update socket counter
 			sockets++;
 			pthread_mutex_unlock(&sock_mutex);
 
 			printf("%d active connections\n", sockets);
-		} else
+		}
+		else // QUEUE is full. Close connection immediately
 		{
 			CLOSESOCKET(socket_client);
 			free(p_sock_cli);
@@ -139,10 +138,13 @@ int main()
 
 void* handle_conn(void *p_socket_client)
 {
+	// Save the socket client in a local variable
 	int socket_client = *(SOCKET*) p_socket_client;
+	// Free the pointer
 	free(p_socket_client);
 	char request[1024];
 
+	// Check if we already have 2 socket that are ECHOing
 	if (active_ctr >= ACTIVE_QUEUE)
 	{
 		char init_reply[] = "Connection is active - You are queued for "
@@ -150,9 +152,8 @@ void* handle_conn(void *p_socket_client)
 		int bytes_sent = send(socket_client, init_reply, strlen(init_reply), 0);
 		printf("Send %d bytes to client in queue\n", bytes_sent);
 
-		/* We wait for the active counter to be less than ACTIVE_QUEUE.
-		 * In while loop to handle spurious wakeups
-		 */
+		// We wait for the active counter to be less than ACTIVE_QUEUE.
+		// In while loop to handle spurious wakeups
 		while (active_ctr >= ACTIVE_QUEUE)
 		{
 			pthread_cond_wait(&ctr_cond, &ctr_mutex);
@@ -160,7 +161,8 @@ void* handle_conn(void *p_socket_client)
 		char ready[] = "You have been dequeued. Ready "
 				"to ECHO.... CTRL^D to close connection\n";
 		send(socket_client, ready, strlen(ready), 0);
-	} else
+	}
+	else // Less than 2 sockets that are ECHOing
 	{
 		// Send a welcome message to the new connection
 		char welcome[] = "Ready to ECHO..... CTRL^D to close connection\n";
@@ -174,7 +176,9 @@ void* handle_conn(void *p_socket_client)
 
 	printf("Reading request...\n");
 
+	// First do a recv() so the while() loop can check for CTRL^D
 	int bytes_received = recv(socket_client, request, 1024, 0);
+	// Zero terminate the response so strlen() works
 	request[bytes_received] = 0;
 
 	while (request[0] != 0x04)
@@ -190,6 +194,7 @@ void* handle_conn(void *p_socket_client)
 
 		printf("Reading request...\n");
 		bytes_received = recv(socket_client, request, 1024, 0);
+		// Zero terminate the response so strlen() works
 		request[bytes_received] = 0;
 
 	}
