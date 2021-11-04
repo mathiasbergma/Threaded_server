@@ -1,0 +1,13 @@
+#!/bin/bash
+
+echo $1
+echo $2
+echo $3
+
+gnome-terminal -e "bash -c \"./$1;-exec bash\""
+
+for ((i=1; i<=$3;i++));
+	do
+		gnome-terminal -e "bash -c \"telnet localhost $2; exec bash\""
+		#echo $i
+	done
